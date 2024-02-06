@@ -50,21 +50,29 @@ class SRTLine:
             return "_eol"
 
 
-OPENAI_SYSTEM_PROMPT = """
-You are an agent that translates Traditional Chinese into English.
-I give you one paragraph of lines in the same topic and context.
-You translate each line and output in a line itself.  Use line breaks to separate each translated line.
-In other words, if I give you 10 lines, you output 10 lines.
+OPENAI_SYSTEM_PROMPT = """You are an agent that translates Traditional Chinese into English.
+I give you one line of text to translate, along with lines surrounding it as the context.
+Translate the line I want you to translate based on the given context, so that the grammar or the tone can be consistent.
+Output only the translation of the line."""
+
+OPENAI_MSG_TEMPLATE = """Context:
+```
+{context}
+```
+
+Line to translate:
+```
+{line_to_translate}
+```
 """
+
 # OPENAI_MODEL = "gpt-4-turbo-preview"
 OPENAI_MODEL = "gpt-3.5-turbo"
-
-BATCH_SIZE = 20
 
 client = OpenAI()
 
 
-def parse_srt_file(filename) -> List[SRTLine]:
+def parse_srt_file(filename) -> Iterator[SRTLine]:
     line_no = 0
     _srt_tmp = dict()
     with open(filename) as f:
@@ -88,8 +96,8 @@ def _get_batch_generator(input_list: list[T], batch_size=10):
         yield input_list[i : i + batch_size]
 
 
-def translate(line_strings: list):
-    print(line_strings)
+def translate(line_to_translate: str, context: str) -> str:
+    print(line_to_translate)
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[
@@ -99,38 +107,42 @@ def translate(line_strings: list):
             },
             {
                 "role": "user",
-                "content": "\n".join(line_strings)
+                "content": OPENAI_MSG_TEMPLATE.format(line_to_translate=line_to_translate,
+                                                      context=context)
             },
         ],
         temperature=0,
     )
     output = response.choices[0].message.content
-    output_lines = output.split("\n")
-    if len(output_lines) != len(line_strings):
-        raise ValueError(f"translation amount is different: {output}")
 
-    return output_lines
+    return output
 
 
 def main(args):
     input_srt_file = args.input_file
     output_srt_file = args.output_file
 
-    srt_lines = list(parse_srt_file(input_srt_file))
+    srt_lines: List[SRTLine] = list(parse_srt_file(input_srt_file))
     translated_srt_lines: List[SRTLine] = []
 
-    for srt_line_batch in _get_batch_generator(srt_lines, batch_size=BATCH_SIZE):
-        line_translations = translate([l.content for l in srt_line_batch])
+    for i in range(len(srt_lines)):
+        original_srt_line = srt_lines[i]
 
-        zipped: Iterator[Tuple[SRTLine, str]] = zip(srt_line_batch, line_translations)
-        for _s, _t in zipped:
-            translated_srt_lines.append(
-                SRTLine(
-                    order=_s.order,
-                    time_str=_s.time_str,
-                    content=_t
-                )
+        line_to_translate = original_srt_line.content
+        context = "\n".join([
+            l.content
+            for l in srt_lines[max(0, i-2): i+3]
+        ])
+
+        line_translation = translate(line_to_translate, context)
+
+        translated_srt_lines.append(
+            SRTLine(
+                order=original_srt_line.order,
+                time_str=original_srt_line.time_str,
+                content=line_translation
             )
+        )
 
     with open(output_srt_file, "w") as f_out:
         for translated_srt_line in translated_srt_lines:
