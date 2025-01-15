@@ -30,6 +30,9 @@ Homepage = "https://github.com/unclefomotw/srt-translator"
 Source = "https://github.com/unclefomotw/srt-translator"
 Tracker = "https://github.com/unclefomotw/srt-translator/issues"
 
+[project.scripts]
+srt-translate = "srt_translator.cli:main"
+
 [tool.setuptools]
 packages = ["srt_translator"]
 package-dir = {'' = 'src'}

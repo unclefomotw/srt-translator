@@ -1,9 +1,15 @@
+import logging
 import re
 
 import aisuite as ai
 import srt
 
 from srt_translator.translator.base import Translator
+from srt_translator.translator.util import rearrange
+
+# Configure logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT_TEMPLATE = """You are an experienced translator. Both {source_lang} and {target_lang}
 are your native languages. Your job is to translate subtitles from {source_lang} to {target_lang}.
@@ -11,7 +17,7 @@ are your native languages. Your job is to translate subtitles from {source_lang}
 The characteristics of these subtitles are as follows:
 * Subtitles are made of lines of text, each of which has an implicit timestamp.
 * Therefore translation should be done line by line.
-* And you should not change the order of the lines.
+* The translation NEEDS TO have the SAME NUMBER OF LINES as the original subtitles!
 
 Line-by-line translation is challenging because you need to maintain the context of the conversation.
 Therefore context and domain knowledge are provided to you.
@@ -33,22 +39,27 @@ The following is the domain knowledge, which you can use to make better translat
 </DOMAIN_KNOWLEDGE>
 
 The subtitles you need to translate are enclosed in <TRANSLATE_THIS> and </TRANSLATE_THIS> tags.
-Please translate thems line by line, and enclose the output between <TRANSLATION> and </TRANSLATION>.
+They are lines delimited by newlines.
+Please translate line by line, and output each line followed by a line break.
+Enclose the output between <TRANSLATION> and </TRANSLATION>.
 
 Here is an example of input and output:
 The input:
 <TRANSLATE_THIS>
-你好嗎？
-我很好，謝謝
+他什麼時候回家？
+他通常晚上十點
+才回家
 </TRANSLATE_THIS>
 
 You should output:
 <TRANSLATION>
-How are you?
-I'm fine, thank you
+When does he go home?
+He usually doesn't go home
+until 10 p.m.
 </TRANSLATION>
 
-Note that the input and output should have the same number of lines.
+Note that the input and output have the same number of line breaks,
+even though it means the translation is mis-ordered for the sake of fluency.
 
 Now, please translate the subtitles:
 <TRANSLATE_THIS>
@@ -69,6 +80,9 @@ class LLMTranslator(Translator):
                   subtitles: list[srt.Subtitle],
                   subtitle_context: str,
                   domain_context: str) -> list[srt.Subtitle]:
+
+        _s = "\n".join([subtitle.content for subtitle in subtitles])
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(source_lang=source_lang,
                                                                         target_lang=target_lang)},
@@ -77,7 +91,7 @@ class LLMTranslator(Translator):
                 target_lang=target_lang,
                 subtitle_context=subtitle_context,
                 domain_context=domain_context,
-                subtitles="\n".join([subtitle.content for subtitle in subtitles])
+                subtitles=_s
                 )}
         ]
 
@@ -90,6 +104,11 @@ class LLMTranslator(Translator):
             raise ValueError(f"Translation error: {response_content}")
 
         if len(subtitles) != len(translations):
-            raise ValueError("Number of subtitles and translations do not match: " + match.group(1))
+            logger.warning("#Lines of subtitles and translations do not match:\n" +
+                           f"{_s}\n" +
+                           "---\n" +
+                           match.group(1))
+            logger.warning("Trying to match subtitles and translations.")
+            translations = rearrange(translations, len(subtitles))
 
         return self.make_new_subtitles(subtitles, translations)
