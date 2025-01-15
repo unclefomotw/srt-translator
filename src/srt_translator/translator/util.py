@@ -15,6 +15,11 @@ def rearrange(translations: list[str], num_lines: int) -> list[str]:
             new_translations.append(" ")
         return new_translations
 
-    # When len(translations) > num_lines, merge two adjacent lines recursively
-    # TODO: Implement this
-    return translations[:num_lines]
+    # len(translations) > num_lines
+    old_len = len(translations)
+    merged_translations = []
+    for i in range(num_lines):
+        i_start = old_len * i // num_lines
+        i_end = old_len * (i + 1) // num_lines
+        merged_translations.append(" ".join(translations[i_start:i_end]))
+    return merged_translations
