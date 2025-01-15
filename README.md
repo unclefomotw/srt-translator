@@ -40,3 +40,8 @@ An example
 ```bash
 srt-translate -i /tmp/captions.srt -o /tmp/translation.srt -s Chinese -t English -m openai:gpt-4o-mini
 ```
+
+You can either use environment variables to specify API keys or put them in `.env` file --
+[python-dotenv](https://pypi.org/project/python-dotenv/) is used in the command.
+
+Serving models by Ollama is also supported, in which case the model string is something like `ollama:llama3.1`
