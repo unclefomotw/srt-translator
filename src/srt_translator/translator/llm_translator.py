@@ -100,15 +100,16 @@ class LLMTranslator(Translator):
         match = OUTPUT_PATTERN.search(response_content)
         if match:
             translations = [s.strip() for s in match.group(1).split("\n") if s.strip()]
-        else:
-            raise ValueError(f"Translation error: {response_content}")
 
-        if len(subtitles) != len(translations):
-            logger.warning("#Lines of subtitles and translations do not match:\n" +
-                           f"{_s}\n" +
-                           "---\n" +
-                           match.group(1))
-            logger.warning("Trying to match subtitles and translations.")
-            translations = rearrange(translations, len(subtitles))
+            if len(subtitles) != len(translations):
+                logger.warning("#Lines of subtitles and translations do not match:\n" +
+                            f"{_s}\n" +
+                            "---\n" +
+                            match.group(1))
+                logger.warning("Trying to match subtitles and translations.")
+                translations = rearrange(translations, len(subtitles))
+        else:
+            logger.error(f"Translation error: {response_content}")
+            translations = [response_content.strip()]
 
         return self.make_new_subtitles(subtitles, translations)
